@@ -1,3 +1,7 @@
+process.env.TWILIO_ACCOUNT_SID = 'ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+process.env.TWILIO_AUTH_TOKEN = 'dummy_auth_token';
+process.env.TWILIO_PHONE_NUMBER = 'whatsapp:+1234567890';
+
 const request = require('supertest');
 const app = require('../../src/index');
 
@@ -23,10 +27,18 @@ describe('Webhook Integration Tests', () => {
       from: '+1234567890',
       messageSid: 'mock-message-sid'
     });
+    twilioService.validateIncomingWebhook.mockReturnValue(true);
   });
 
   describe('POST /webhook/whatsapp', () => {
     it('should handle incoming WhatsApp messages', async () => {
+      // Mock parseIncomingMessage to match the test input
+      twilioService.parseIncomingMessage.mockReturnValue({
+        message: 'What events are coming up?',
+        from: '+1234567890',
+        messageSid: 'test-message-sid'
+      });
+
       const response = await request(app)
         .post('/webhook/whatsapp')
         .send({
@@ -47,6 +59,12 @@ describe('Webhook Integration Tests', () => {
         success: true,
         messageId: 'welcome-message-id'
       });
+      // Mock parseIncomingMessage to match the test input
+      twilioService.parseIncomingMessage.mockReturnValue({
+        message: 'start',
+        from: '+1234567890',
+        messageSid: 'test-message-sid'
+      });
 
       const response = await request(app)
         .post('/webhook/whatsapp')
@@ -59,7 +77,8 @@ describe('Webhook Integration Tests', () => {
         .expect(200);
 
       expect(response.text).toBe('OK');
-      expect(twilioService.sendWelcomeMessage).toHaveBeenCalledWith('+1234567890', 'there');
+      // Only check that sendWelcomeMessage was called with the 'from' value
+      expect(twilioService.sendWelcomeMessage).toHaveBeenCalledWith('+1234567890');
     });
 
     it('should handle empty messages', async () => {

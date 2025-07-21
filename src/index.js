@@ -5,10 +5,11 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const logger = require('./utils/logger');
-const errorHandler = require('./utils/errorHandler');
+const { errorHandler } = require('./utils/errorHandler');
 const whatsappWebhook = require('./routes/whatsappWebhook');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
