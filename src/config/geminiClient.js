@@ -1,21 +1,10 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const logger = require('../utils/logger');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const logger = require("../utils/logger");
 
 // Initialize Gemini client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Create model instance with Gemini 2.5 Flash
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.5-flash",
-  generationConfig: {
-    temperature: 0.7,
-    topK: 40,
-    topP: 0.95,
-    maxOutputTokens: 2048,
-  },
-});
-
-// Function definitions for Gemini to call
+// Function definitions for Gemini to call (Calendar only)
 const functionDefinitions = [
   {
     name: "get_upcoming_events",
@@ -24,16 +13,15 @@ const functionDefinitions = [
       type: "object",
       properties: {
         maxResults: {
-          type: "number",
-          description: "Maximum number of events to return (default: 5)"
+          type: "integer",
+          description: "Maximum number of events to return (default: 5)",
         },
         daysAhead: {
-          type: "number", 
-          description: "Number of days ahead to look for events (default: 30)"
-        }
+          type: "integer",
+          description: "Number of days ahead to look for events (default: 30)",
+        },
       },
-      required: []
-    }
+    },
   },
   {
     name: "get_event_details",
@@ -43,15 +31,14 @@ const functionDefinitions = [
       properties: {
         eventId: {
           type: "string",
-          description: "The ID of the specific event"
+          description: "The ID of the specific event",
         },
         eventTitle: {
           type: "string",
-          description: "The title or name of the event to search for"
-        }
+          description: "The title or name of the event to search for",
+        },
       },
-      required: []
-    }
+    },
   },
   {
     name: "get_past_events",
@@ -60,53 +47,16 @@ const functionDefinitions = [
       type: "object",
       properties: {
         maxResults: {
-          type: "number",
-          description: "Maximum number of events to return (default: 5)"
+          type: "integer",
+          description: "Maximum number of events to return (default: 5)",
         },
         daysBack: {
-          type: "number",
-          description: "Number of days back to look for events (default: 90)"
-        }
-      },
-      required: []
-    }
-  },
-  {
-    name: "get_faqs",
-    description: "Get frequently asked questions and their answers",
-    parameters: {
-      type: "object",
-      properties: {
-        category: {
-          type: "string",
-          description: "Category of FAQs to retrieve (e.g., 'events', 'membership', 'general')"
+          type: "integer",
+          description: "Number of days back to look for events (default: 90)",
         },
-        searchTerm: {
-          type: "string",
-          description: "Search term to find relevant FAQs"
-        }
       },
-      required: []
-    }
+    },
   },
-  {
-    name: "get_speaker_info",
-    description: "Get information about event speakers",
-    parameters: {
-      type: "object",
-      properties: {
-        speakerName: {
-          type: "string",
-          description: "Name of the speaker to search for"
-        },
-        eventId: {
-          type: "string",
-          description: "Event ID to get speakers for"
-        }
-      },
-      required: []
-    }
-  }
 ];
 
 // System prompt for the bot
@@ -129,18 +79,34 @@ Key guidelines:
 
 Remember: You're helping to build and support a vibrant developer community!`;
 
+// Create model instance with Gemini 2.5 Flash
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  generationConfig: {
+    temperature: 0.7,
+    topK: 40,
+    topP: 0.95,
+    maxOutputTokens: 2048,
+  },
+  tools: [{ functionDeclarations: functionDefinitions }], // Configure tools at model level like in Python
+});
+
 // Create chat session with function calling
 const createChatSession = () => {
   return model.startChat({
     history: [
       {
         role: "user",
-        parts: [{ text: systemPrompt }]
+        parts: [{ text: systemPrompt }],
       },
       {
         role: "model",
-        parts: [{ text: "Hello! I'm GDG Event Assistant, your friendly guide to all things GDG! 🚀 I'm here to help you with event information, speaker details, and community insights. What would you like to know about our upcoming events or community activities?" }]
-      }
+        parts: [
+          {
+            text: "Hello! I'm GDG Event Assistant, your friendly guide to all things GDG! 🚀 I'm here to help you with event information, speaker details, and community insights. What would you like to know about our upcoming events or community activities?",
+          },
+        ],
+      },
     ],
     generationConfig: {
       temperature: 0.7,
@@ -148,7 +114,7 @@ const createChatSession = () => {
       topP: 0.95,
       maxOutputTokens: 2048,
     },
-    tools: functionDefinitions
+    // Tools are already configured at model level, no need to duplicate here
   });
 };
 
@@ -156,41 +122,98 @@ const createChatSession = () => {
 const handleFunctionCall = async (functionCall) => {
   const { name, args } = functionCall;
   logger.info(`Function called: ${name} with args:`, args);
-  
+
   try {
+    let result;
     switch (name) {
-      case 'get_upcoming_events':
-        const calendarService = require('../services/googleCalendarService');
-        return await calendarService.getUpcomingEvents(args.maxResults || 5, args.daysAhead || 30);
-        
-      case 'get_event_details':
-        const eventService = require('../services/googleCalendarService');
-        return await eventService.getEventDetails(args.eventId, args.eventTitle);
-        
-      case 'get_past_events':
-        const pastEventsService = require('../services/googleCalendarService');
-        return await pastEventsService.getPastEvents(args.maxResults || 5, args.daysBack || 90);
-        
-      case 'get_faqs':
-        const sheetsService = require('../services/googleSheetsService');
-        return await sheetsService.getFAQs(args.category, args.searchTerm);
-        
-      case 'get_speaker_info':
-        const speakerService = require('../services/googleSheetsService');
-        return await speakerService.getSpeakerInfo(args.speakerName, args.eventId);
-        
+      case "get_upcoming_events":
+        const calendarService = require("../services/googleCalendarService");
+        result = await calendarService.getUpcomingEvents(
+          args.maxResults || 5,
+          args.daysAhead || 30
+        );
+        break;
+
+      case "get_event_details":
+        const eventService = require("../services/googleCalendarService");
+        result = await eventService.getEventDetails(
+          args.eventId,
+          args.eventTitle
+        );
+        break;
+
+      case "get_past_events":
+        const pastEventsService = require("../services/googleCalendarService");
+        result = await pastEventsService.getPastEvents(
+          args.maxResults || 5,
+          args.daysBack || 90
+        );
+        break;
+
       default:
         throw new Error(`Unknown function: ${name}`);
     }
+
+    // Format the result for better readability
+    return formatFunctionResult(name, result);
   } catch (error) {
     logger.error(`Error executing function ${name}:`, error);
-    throw error;
+    return {
+      success: false,
+      error: error.message,
+      message: `Failed to execute ${name}: ${error.message}`,
+    };
   }
+};
+
+// Helper function to format function results
+const formatFunctionResult = (functionName, result) => {
+  switch (functionName) {
+    case "get_upcoming_events":
+    case "get_past_events":
+      if (result.success && result.events) {
+        return {
+          success: true,
+          message: result.message,
+          events: result.events.map((event) => ({
+            title: event.title,
+            description: event.description,
+            start: event.start,
+            end: event.end,
+            location: event.location,
+            attendees: event.attendees,
+          })),
+        };
+      }
+      break;
+
+    case "get_event_details":
+      if (result.success && result.event) {
+        return {
+          success: true,
+          message: result.message,
+          event: {
+            title: result.event.title,
+            description: result.event.description,
+            start: result.event.start,
+            end: result.event.end,
+            location: result.event.location,
+            attendees: result.event.attendees,
+            speakers: result.event.speakers,
+          },
+        };
+      }
+      break;
+  }
+
+  // Default formatting
+  return result;
 };
 
 module.exports = {
   model,
   createChatSession,
   handleFunctionCall,
-  functionDefinitions
-}; 
+  formatFunctionResult,
+  functionDefinitions,
+};
